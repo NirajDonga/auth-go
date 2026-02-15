@@ -22,7 +22,7 @@ func (h *Handler) RegisterHandler(c *gin.Context) {
 		})
 		return
 	}
-
+ 
 	out, err := h.svc.Register(c.Request.Context(), input)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{

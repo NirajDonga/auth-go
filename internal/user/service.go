@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -25,6 +26,10 @@ func NewService(repo *Repo, jwtSecret string) *Service {
 }
 
 type RegisterInput struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+type LoginInput struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
@@ -50,7 +55,7 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (Authresult
 		return Authresult{}, errors.New("Email already registered")
 	}
 
-	if err != nil && !errors.Is(err, mongo.ErrNilDocument) {
+	if !errors.Is(err, mongo.ErrNoDocuments) {
 		return Authresult{}, err
 	}
 
@@ -62,6 +67,7 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (Authresult
 	now := time.Now().UTC()
 
 	u := User{
+		ID:        primitive.NewObjectID(),
 		Email:     email,
 		Password:  string(hashBytes),
 		Role:      "user",
@@ -82,4 +88,28 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (Authresult
 		Token: token,
 		User:  ToPublic(created),
 	}, nil
+}
+
+func (s *Service) LogIn(ctx context.Context, input LoginInput) (Authresult, error) {
+	email := strings.ToLower(strings.TrimSpace(input.Email))
+	pass := strings.ToLower(strings.TrimSpace(input.Password))
+
+	if email == "" || pass == "" {
+		return Authresult{}, errors.New("Email and Password are required")
+	}
+
+	u, err := s.repo.FindByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return Authresult{}, errors.New("Invalid Credentials")
+		}
+		return Authresult{}, err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(pass)); err != nil {
+		return Authresult{}, errors.New("Invalid Credentials or wrong password")
+	}
+
+	
+
 }
