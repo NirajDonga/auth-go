@@ -19,7 +19,9 @@ func NewRouter(a *app.App) *gin.Engine {
 	userSvc := user.NewService(userRepo, a.Config.JWTSecret)
 	userHandler := user.NewHandler(userSvc)
 
+	// unauth routes -> public routes
 	r.POST("/register", userHandler.RegisterHandler)
+	r.POST("/login", userHandler.LoginHandler)
 
 	return r
 }

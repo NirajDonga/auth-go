@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -29,8 +30,36 @@ func CreateToken(jwtSeceret string, userID string, role string) (string, error) 
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, err := tok.SignedString([]byte(jwtSeceret))
 	if err != nil {
-		return "", fmt.Errorf("Sign token failed: %w", err)
+		return "", fmt.Errorf("Sign tokenString failed: %w", err)
 	}
 
 	return signed, nil
+}
+
+func ParseToken(jwtSecret string, tokenString string) (Claims, error) {
+	var claims Claims
+
+	parsed, err := jwt.ParseWithClaims(tokenString, &claims,
+		func(t *jwt.Token) (interface{}, error) {
+			if t.Method.Alg() != jwt.SigningMethodHS256.Alg() {
+				return nil, fmt.Errorf("Unexpected Signin Method: %v", t.Header["alg"])
+			}
+			return []byte(jwtSecret), nil
+		},
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+	)
+
+	if err != nil {
+		return Claims{}, fmt.Errorf("Parse token faled: %w", err)
+	}
+	if !parsed.Valid {
+		return Claims{}, errors.New("Invalid Token")
+	}
+
+	if claims.Subject == "" {
+		return Claims{}, errors.New("Token missing subject")
+	}
+
+	return claims, nil
+
 }

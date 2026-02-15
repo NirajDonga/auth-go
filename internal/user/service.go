@@ -110,6 +110,14 @@ func (s *Service) LogIn(ctx context.Context, input LoginInput) (Authresult, erro
 		return Authresult{}, errors.New("Invalid Credentials or wrong password")
 	}
 
-	
+	token, err := auth.CreateToken(s.jwtSecret, u.ID.Hex(), u.Role)
+	if err != nil {
+		return Authresult{}, err
+	}
+
+	return Authresult{
+		Token: token,
+		User:  ToPublic(u),
+	}, nil
 
 }
