@@ -24,7 +24,7 @@ func Connect(ctx context.Context, cfg config.Config) (*Mongo, error) {
 
 	client, err := mongo.Connect(connectCtx, clientOpts)
 	if err != nil {
-		return nil, fmt.Errorf("MongoConnection failed: %w", err)
+		return nil, fmt.Errorf("Mongo Connection failed: %w", err)
 	}
 
 	database := client.Database(cfg.MongoName)

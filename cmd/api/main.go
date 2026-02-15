@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"go-auth/internal/app"
 	"go-auth/internal/httpserver"
 	"log"
 	"net/http"
@@ -9,7 +11,20 @@ import (
 
 func main() {
 
-	router := httpserver.NewRouter()
+	ctx := context.Background()
+
+	a, err := app.New(ctx)
+	if err != nil {
+		log.Fatalf("Startup Failed: %v", err)
+	}
+
+	defer func() {
+		if err := a.Close(ctx); err != nil {
+			log.Printf("Shut down warning: %v", err)
+		}
+	}()
+
+	router := httpserver.NewRouter(a)
 
 	srv := &http.Server{
 		Addr:              ":8080",

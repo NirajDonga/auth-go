@@ -1,0 +1,85 @@
+package user
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"go-auth/internal/auth"
+	"strings"
+	"time"
+
+	"go.mongodb.org/mongo-driver/mongo"
+	"golang.org/x/crypto/bcrypt"
+)
+
+type Service struct {
+	repo      *Repo
+	jwtSecret string
+}
+
+func NewService(repo *Repo, jwtSecret string) *Service {
+	return &Service{
+		repo:      repo,
+		jwtSecret: jwtSecret,
+	}
+}
+
+type RegisterInput struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+type Authresult struct {
+	Token string     `json:"token"`
+	User  PublicUser `json:"user"`
+}
+
+func (s *Service) Register(ctx context.Context, input RegisterInput) (Authresult, error) {
+	email := strings.ToLower(strings.TrimSpace(input.Email))
+	pass := strings.ToLower(strings.TrimSpace(input.Password))
+
+	if email == "" || pass == "" {
+		return Authresult{}, errors.New("Email and Password are required")
+	}
+
+	if len(pass) < 6 {
+		return Authresult{}, errors.New("Password must br 6 characters long")
+	}
+
+	_, err := s.repo.FindByEmail(ctx, email)
+	if err == nil {
+		return Authresult{}, errors.New("Email already registered")
+	}
+
+	if err != nil && !errors.Is(err, mongo.ErrNilDocument) {
+		return Authresult{}, err
+	}
+
+	hashBytes, err := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
+	if err != nil {
+		return Authresult{}, fmt.Errorf("Hashing of password failed: %w", err)
+	}
+
+	now := time.Now().UTC()
+
+	u := User{
+		Email:     email,
+		Password:  string(hashBytes),
+		Role:      "user",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	created, err := s.repo.Create(ctx, u)
+	if err != nil {
+		return Authresult{}, err
+	}
+
+	token, err := auth.CreateToken(s.jwtSecret, created.ID.Hex(), u.Role)
+	if err != nil {
+		return Authresult{}, err
+	}
+	return Authresult{
+		Token: token,
+		User:  ToPublic(created),
+	}, nil
+}
