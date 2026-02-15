@@ -18,7 +18,7 @@ func AuthRequired(jwtSecret string) gin.HandlerFunc {
 		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
 		if authHeader == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "Missing Auth tokenString",
+				"error": "Missing Authorization header",
 			})
 			return
 		}
@@ -26,7 +26,7 @@ func AuthRequired(jwtSecret string) gin.HandlerFunc {
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "Invalid Auth formate",
+				"error": "Invalid Authorization format",
 			})
 			return
 		}
@@ -34,16 +34,17 @@ func AuthRequired(jwtSecret string) gin.HandlerFunc {
 		scheme := strings.TrimSpace(parts[0])
 		tokenString := strings.TrimSpace(parts[1])
 
+		// Case-insensitive check is often safer for "Bearer"
 		if !strings.EqualFold(scheme, "Bearer") {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "Header Not in Bearer Formate",
+				"error": "Header not in Bearer format",
 			})
 			return
 		}
 
-		if !strings.EqualFold(tokenString, "") {
+		if tokenString == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "Missing tokenString",
+				"error": "Missing token string",
 			})
 			return
 		}
@@ -51,7 +52,7 @@ func AuthRequired(jwtSecret string) gin.HandlerFunc {
 		claims, err := auth.ParseToken(jwtSecret, tokenString)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "Invalid or Expired Token",
+				"error": "Invalid or expired token",
 			})
 			return
 		}
