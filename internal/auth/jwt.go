@@ -13,7 +13,7 @@ type Claims struct {
 	Role string `json:"role"`
 }
 
-func CreateToken(jwtSeceret string, userID string, role string) (string, error) {
+func CreateToken(jwtSecret string, userID string, role string) (string, error) {
 
 	now := time.Now().UTC()
 	exp := now.Add(7 * 24 * time.Hour)
@@ -28,7 +28,7 @@ func CreateToken(jwtSeceret string, userID string, role string) (string, error) 
 	}
 
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := tok.SignedString([]byte(jwtSeceret))
+	signed, err := tok.SignedString([]byte(jwtSecret))
 	if err != nil {
 		return "", fmt.Errorf("Sign tokenString failed: %w", err)
 	}
@@ -50,7 +50,7 @@ func ParseToken(jwtSecret string, tokenString string) (Claims, error) {
 	)
 
 	if err != nil {
-		return Claims{}, fmt.Errorf("Parse token faled: %w", err)
+		return Claims{}, fmt.Errorf("parse token failed: %w", err)
 	}
 	if !parsed.Valid {
 		return Claims{}, errors.New("Invalid Token")

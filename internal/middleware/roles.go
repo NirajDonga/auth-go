@@ -21,6 +21,7 @@ func RequireAdmin() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "No access Without Admin",
 			})
+			return
 		}
 
 		c.Next()

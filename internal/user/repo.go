@@ -2,53 +2,54 @@ package user
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
+	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Repo struct {
-	coll *mongo.Collection
+	pool *pgxpool.Pool
 }
 
-func NewRepo(db *mongo.Database) *Repo {
-	return &Repo{coll: db.Collection("users")}
+func NewRepo(pool *pgxpool.Pool) *Repo {
+	return &Repo{pool: pool}
 }
 
 func (r *Repo) FindByEmail(ctx context.Context, email string) (User, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
-
-	filter := bson.M{"email": email}
+	childCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 
 	var u User
-	err := r.coll.FindOne(ctx, filter).Decode(&u)
-
-	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return User{}, mongo.ErrNoDocuments
+	row := r.pool.QueryRow(childCtx, `SELECT id, email, password, role, created_at, updated_at FROM users WHERE email=$1`, email)
+	if err := row.Scan(&u.ID, &u.Email, &u.Password, &u.Role, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err == pgx.ErrNoRows {
+			return User{}, pgx.ErrNoRows
 		}
-		return User{}, fmt.Errorf("Find by email failed: %w", err)
+		return User{}, fmt.Errorf("find by email failed: %w", err)
 	}
 	return u, nil
 }
 
 func (r *Repo) Create(ctx context.Context, u User) (User, error) {
-
-	res, err := r.coll.InsertOne(ctx, u)
-	if err != nil {
-		return User{}, fmt.Errorf("Insert User Failed: %w", err)
-	}
-
-	id, ok := res.InsertedID.(primitive.ObjectID)
-	if !ok {
-		return User{}, fmt.Errorf("Insert User Failed and Inserted id is not objectId: %w", err)
-	}
-
+	id := uuid.NewString()
+	now := time.Now().UTC()
 	u.ID = id
+	u.CreatedAt = now
+	u.UpdatedAt = now
+
+	childCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	_, err := r.pool.Exec(childCtx, `INSERT INTO users (id, email, password, role, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6)`,
+		u.ID, u.Email, u.Password, u.Role, u.CreatedAt, u.UpdatedAt)
+	if err != nil {
+		return User{}, fmt.Errorf("insert user failed: %w", err)
+	}
 
 	return u, nil
 }

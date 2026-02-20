@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"go-auth/internal/auth"
 	"strings"
-	"time"
 
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -40,14 +38,14 @@ type Authresult struct {
 
 func (s *Service) Register(ctx context.Context, input RegisterInput) (Authresult, error) {
 	email := strings.ToLower(strings.TrimSpace(input.Email))
-	pass := strings.ToLower(strings.TrimSpace(input.Password))
+	pass := strings.TrimSpace(input.Password)
 
 	if email == "" || pass == "" {
 		return Authresult{}, errors.New("Email and Password are required")
 	}
 
 	if len(pass) < 6 {
-		return Authresult{}, errors.New("Password must br 6 characters long")
+		return Authresult{}, errors.New("Password must be at least 6 characters long")
 	}
 
 	_, err := s.repo.FindByEmail(ctx, email)
@@ -55,7 +53,7 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (Authresult
 		return Authresult{}, errors.New("Email already registered")
 	}
 
-	if !errors.Is(err, mongo.ErrNoDocuments) {
+	if !errors.Is(err, pgx.ErrNoRows) {
 		return Authresult{}, err
 	}
 
@@ -64,15 +62,10 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (Authresult
 		return Authresult{}, fmt.Errorf("Hashing of password failed: %w", err)
 	}
 
-	now := time.Now().UTC()
-
 	u := User{
-		ID:        primitive.NewObjectID(),
-		Email:     email,
-		Password:  string(hashBytes),
-		Role:      "user",
-		CreatedAt: now,
-		UpdatedAt: now,
+		Email:    email,
+		Password: string(hashBytes),
+		Role:     "user",
 	}
 
 	created, err := s.repo.Create(ctx, u)
@@ -80,7 +73,7 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (Authresult
 		return Authresult{}, err
 	}
 
-	token, err := auth.CreateToken(s.jwtSecret, created.ID.Hex(), u.Role)
+	token, err := auth.CreateToken(s.jwtSecret, created.ID, u.Role)
 	if err != nil {
 		return Authresult{}, err
 	}
@@ -92,7 +85,7 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (Authresult
 
 func (s *Service) LogIn(ctx context.Context, input LoginInput) (Authresult, error) {
 	email := strings.ToLower(strings.TrimSpace(input.Email))
-	pass := strings.ToLower(strings.TrimSpace(input.Password))
+	pass := strings.TrimSpace(input.Password)
 
 	if email == "" || pass == "" {
 		return Authresult{}, errors.New("Email and Password are required")
@@ -100,7 +93,7 @@ func (s *Service) LogIn(ctx context.Context, input LoginInput) (Authresult, erro
 
 	u, err := s.repo.FindByEmail(ctx, email)
 	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return Authresult{}, errors.New("Invalid Credentials")
 		}
 		return Authresult{}, err
@@ -110,7 +103,7 @@ func (s *Service) LogIn(ctx context.Context, input LoginInput) (Authresult, erro
 		return Authresult{}, errors.New("Invalid Credentials or wrong password")
 	}
 
-	token, err := auth.CreateToken(s.jwtSecret, u.ID.Hex(), u.Role)
+	token, err := auth.CreateToken(s.jwtSecret, u.ID, u.Role)
 	if err != nil {
 		return Authresult{}, err
 	}
